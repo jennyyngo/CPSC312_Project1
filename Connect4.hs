@@ -301,5 +301,6 @@ main = play (newBoard (row,col))
 
 {-
 NOTES:
+This link was very useful to start our game of connect 4. http://www.cs.nott.ac.uk/~pszgmh/afp-cwk1.pdf
 Diagonal checks were taken from https://github.com/maysam/connect-four-haskell/blob/master/Board.hs
 -}
