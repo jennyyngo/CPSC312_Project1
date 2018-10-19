@@ -5,14 +5,15 @@ import Data.Map (Map)
 import Data.Maybe
 import Data.Ord
 
-type Column = Int
 type Row = Int
+type Column = Int
 
 data Player = P1 | P2
     deriving (Ord, Eq, Show)
 
 -- setup board
 -- board is an ADT. Tile is the Constructor. Similar to how BSTree is an ADT and Node is the constructor
+-- got idea of using a constructor from stackoverflow
 data Board  =  Tile [[Player]]  (Row, Column)
         deriving (Show)
 
@@ -21,13 +22,15 @@ data Board  =  Tile [[Player]]  (Row, Column)
 newBoard:: (Row, Column) -> Board
 newBoard (r, c) = Tile (replicate c []) (r, c)
 
--- checks if player won
+showPlayer :: Player -> [Char]
+showPlayer P1 = "P1"
+showPlayer P2 = "P2"
 
-moveWin :: Board -> Column -> Player -> Bool
-moveWin bd col player 
-    | checkWin (makeMove bd col player) == 1 = True
-    | checkWin (makeMove bd col player) == 2 = True
-    | otherwise = False
+-- nextPlayer P1 will return P2 and vice versa
+nextPlayer :: Player -> Player
+nextPlayer player 
+    | player == P1 = P2
+    | player == P2 = P1
 
 -- TODO: CAN WE SIMPLIFY ALL THESE CHECKS?? 
 
@@ -42,74 +45,64 @@ checkHorizontal (a:t) player = False
 -- checks for a vertical win
 checkVertical :: Board -> Player -> Bool
 checkVertical (Tile [] (row, col)) player = False
-checkVertical (Tile (h:t) (row, col)) player = 
-    (checkHorizontal h player) || checkVertical (Tile t (row, col)) player
+checkVertical (Tile (h:t) (row, col)) player
+    | (checkHorizontal h player) = True
+    | otherwise = checkVertical (Tile t (row, col)) player
 
--- nextPlayer P1 will return P2 and vice versa
-nextPlayer :: Player -> Player
-nextPlayer player 
-    | player == P1 = P2
-    | player == P2 = P1
-
--- TODO: What does this do? Inputs of board, x position, y position, and the player, and ... idk what len does hmm
-getItem :: Board -> Int -> Int -> Player -> Player
-getItem (Tile x (row, col)) a b player 
-    | b < length len = len !! b
+-- Inputs of board, x position, y position, and the player, and
+-- returns a tile piece
+getTile :: Board -> Int -> Int -> Player -> Player
+getTile (Tile bd (row, col)) x y player 
+    | y < length len = len !! y
     | otherwise = player
-    where len | a < length x = x !! a | otherwise = []
+    where len | x < length bd = bd !! x | otherwise = []
 
 -- checks for right diagonal win
-checkRightDiagonal :: Board -> Player -> Int -> Int -> Bool
-checkRightDiagonal x player a b = q1 == q2 && q1 == q3 && q1 == q4 && q1 == player
+checkRightCoin :: Board -> Player -> Int -> Int -> Bool
+checkRightCoin bd player x y = t1 == player && t2 == player && t3 == player && t4 == player 
     where 
-        p1 = nextPlayer player
-        q1 = getItem x a b p1
-        q2 = getItem x (a+1) (b+1) p1
-        q3 = getItem x (a+2) (b+2) p1
-        q4 = getItem x (a+3) (b+3) p1
+        player2 = nextPlayer player
+        t1 = getTile bd x y player
+        t2 = getTile bd (x+1) (y+1) player2
+        t3 = getTile bd (x+2) (y+2) player2
+        t4 = getTile bd (x+3) (y+3) player2
 
-checkRightDiag :: Board -> Player -> Int -> Int -> Bool
-checkRightDiag x@(Tile y (r, c)) p a b | a>c-4 && b > r - 5 = False
-              | a>c-4 = checkRightDiag x p 0 (b+1)
-              | otherwise = checkRightDiagonal x p a b || checkRightDiag x p (a+1) b
+checkRightDiagIter :: Board -> Player -> Int -> Int -> Bool
+checkRightDiagIter x@(Tile y (r, c)) p a b | a > c-4 && b > r - 5 = False
+              | a>c-4 = checkRightDiagIter x p 0 (b+1)
+              | otherwise = checkRightCoin x p a b || checkRightDiagIter x p (a+1) b
 
-rightCheck :: Board -> Player -> Bool
-rightCheck  x p = checkRightDiag  x p 0 0
+-- checks for a right diagonal win (/)
+checkRightDiag :: Board -> Player -> Bool
+checkRightDiag  bd p = checkRightDiagIter  bd p 0 0
 
+--checks for a left diagonal win (\)
+checkLeftCoin :: Board -> Player -> Int -> Int -> Bool
+checkLeftCoin bd player x y = 
+    t1 == player && t2 == player && t3 == player && t4 == player
+    where
+        player2 = nextPlayer player
+        t1 = getTile bd x y player2
+        t2 = getTile bd (x-1) (y+1) player2
+        t3 = getTile bd (x-2) (y+2) player2
+        t4 = getTile bd (x-3) (y+3) player2
 
---checks for a left diagonal win
-leftCheckItem :: Board -> Player -> Int -> Int -> Bool
-leftCheckItem x p a b = q1 ==  q2 && q1 == q3 && q1 == q4 && q1 == p
-      where
-   p1 = nextPlayer p
-   q1 = getItem x a b p1
-   q2 = getItem x (a-1) (b+1) p1
-   q3 = getItem x (a-2) (b+2) p1
-   q4 = getItem x (a-3) (b+3) p1
-
--- leftCheckIter takes in a board, player, x position of coin, y position of coin and checks for \
+-- checkLeftDiagIter takes in a board, player, x position of coin, y position of coin and checks for \
 -- if the bottom coin is on the bottom row, then the minimum x position is 3
--- which is why leftCheck passes a = 3, b = 0
-leftCheckIter :: Board -> Player -> Int -> Int -> Bool
-leftCheckIter x@(Tile y (r,c)) p a b
-            -- a = 7 ; b = 2 ; r = 6 ; c = 7
-            -- 7 >= 7 && 0 < (6-4)
-            -- 7 >= 7 && 1 < 2
-            -- 7 >= 7 && 2 < 2 .. false
-            | a >= c && b < (r-4) = leftCheckIter x p 3 (b+1)
-            | a >= c && b >= (r-4) = False
-            | otherwise = leftCheckItem x p a b || leftCheckIter x p (a+1) b
+-- which is why checkLeftDiag passes a = 3, b = 0
+checkLeftDiagIter :: Board -> Player -> Int -> Int -> Bool
+checkLeftDiagIter bd@(Tile b (r,c)) player x y 
+            | x >= c && y < (r-4) = checkLeftDiagIter bd player 3 (y+1)
+            | x >= c && y >= (r-4) = False
+            | otherwise = checkLeftCoin bd player x y || checkLeftDiagIter bd player (x+1) y
 
-
-leftCheck :: Board -> Player -> Bool
-leftCheck  (Tile x (r, c))  p | c > 3 = leftCheckIter (Tile x (r,c)) p 3 0
+--checks (goes into checkLeftDiagIter) if columns is greater than 3, as you need at least 4 columns for a diagonal connect
+-- and with our standard board, we have 7 columns, we will check for diagonals starting from the case coin in midle bottom placement
+checkLeftDiag :: Board -> Player -> Bool
+checkLeftDiag  (Tile x (r, c))  p | c > 3 = checkLeftDiagIter (Tile x (r,c)) p 3 0
            | otherwise = False
 
---checks diagonals and columns and columns of the transpose to see if Player is the winner
-check :: Board -> Player -> Bool
-check x p = (leftCheck x p) || (rightCheck x p) || (checkVertical x p) || (checkVertical (transboard x) p)
-
--- tranposes the board
+-- tranposes the board, switches columns into rows, and vice versa
 transboard :: Board -> Board
 transboard y@(Tile x (r,c)) = player2board ( transpose ( board2player y)) r c
 
@@ -121,11 +114,15 @@ board2player (Tile x (row, col)) = x
 player2board :: [[Player]] -> Row -> Column -> Board
 player2board x r c = (Tile x (r,c))
 
+--checks diagonals, horizontal, and vertical wins. use transpose of board to flip it
+checkWinIter :: Board -> Player -> Bool
+checkWinIter x p = (checkLeftDiag x p) || (checkRightDiag x p) || (checkVertical x p) || (checkVertical (transboard x) p)
+
 -- checks if there is a winner
 checkWin :: Board -> Int
 checkWin bd 
-    | check bd P1 = 1
-    | check bd P2 = 2
+    | checkWinIter bd P1 = 1
+    | checkWinIter bd P2 = 2
     | otherwise = 0
 
 -- checks if board full (if yes, then it's a tie)
@@ -138,79 +135,80 @@ isDraw (Tile (x:xs) (r, c))
 -- turns board to string
 showBoard :: Board -> String
 showBoard b@(Tile x (r,c)) 
-    | checkWin b == 0 = (whr b 1 0) ++ trailer (c-1)
-    | checkWin b == 1 = (whr b 1 1) ++ trailer (c-1)
-    | checkWin b == 2 = (whr b 1 2) ++ trailer (c-1)
+    | checkWin b == 0 = (printBoard b 1 0) ++ printBottom (c-1)
+    | checkWin b == 1 = (printBoard b 1 1) ++ printBottom (c-1)
+    | checkWin b == 2 = (printBoard b 1 2) ++ printBottom (c-1)
 
--- generates the trailing lines for the output
-trailer :: Int -> String
-trailer a | a == -1 = "+\n"
-    | otherwise = "+-" ++ trailer (a-1) ++ " " ++ (show a)
+-- generates the bottom lines of the board
+printBottom :: Int -> String
+printBottom a 
+    | a == -1 = "+\n"
+    | otherwise = "+-" ++ printBottom (a-1) ++ " " ++ (show a)
 
--- TODO: WHAT DO ALL THESE FUNCTIONS DO??
 
 -- TODO: to change the symbols for the winning player, we need to change this function.
 --creates output for each cell
 
 -- if not a winning board
-wh1 :: [Player] -> Int -> String
-wh1 [] p = " |"
-wh1 x 1 | head x == P1 = "X|"
+printNoWinBoard :: [Player] -> Int -> String
+printNoWinBoard [] p = " |"
+printNoWinBoard x 1 | head x == P1 = "X|"
   | head x == P2 = "O|"
   | otherwise = " |"
-wh1 x p | p > (length x) = " |"
-  | otherwise = (wh1 (tail x) (p-1))
+printNoWinBoard x p | p > (length x) = " |"
+  | otherwise = (printNoWinBoard (tail x) (p-1))
 
 -- if P1 is winner
-xh1 :: [Player] -> Int -> String
-xh1 [] p = " |"
-xh1 x 1 
+printWinBoard1 :: [Player] -> Int -> String
+printWinBoard1 [] p = " |"
+printWinBoard1 x 1 
     | head x == P1 = "*|"
     | head x == P2 = "O|"
     | otherwise = " |"
-xh1 x p 
+printWinBoard1 x p 
     | p > (length x) = " |"
-    | otherwise = (xh1 (tail x) (p-1))
+    | otherwise = (printWinBoard1 (tail x) (p-1))
 
     -- if P2 is winner
-yh1 :: [Player] -> Int -> String
-yh1 [] p = " |"
-yh1 x 1 
+printWinBoard2 :: [Player] -> Int -> String
+printWinBoard2 [] p = " |"
+printWinBoard2 x 1 
     | head x == P1 = "X|"
     | head x == P2 = "*|"
     | otherwise = " |"
-yh1 x p 
+printWinBoard2 x p 
     | p > (length x) = " |"
-    | otherwise = (yh1 (tail x) (p-1))
+    | otherwise = (printWinBoard2 (tail x) (p-1))
 
 --seperated the cells of one row
 -- if not a winning board
-wh :: [[Player]] -> Int -> Int -> String
-
-wh [x] p win
-    | win == 1 = xh1 x p
-    | win == 2 = yh1 x p
-    | otherwise = wh1 x p
-wh (x:t) p win
-    | win == 1 = xh1 x p ++ wh t p win
-    | win == 2 = yh1 x p ++ wh t p win
-    | otherwise = wh1 x p ++ wh t p win
+printBoardHelper :: [[Player]] -> Int -> Int -> String
+printBoardHelper [x] p win
+    | win == 1 = printWinBoard1 x p
+    | win == 2 = printWinBoard2 x p
+    | otherwise = printNoWinBoard x p
+printBoardHelper (x:t) p win
+    | win == 1 = printWinBoard1 x p ++ printBoardHelper t p win
+    | win == 2 = printWinBoard2 x p ++ printBoardHelper t p win
+    | otherwise = printNoWinBoard x p ++ printBoardHelper t p win
 
 -- joins the rows together, original table is created from columns !
 -- if not a winning board
-whr :: Board -> Int -> Int -> String
-whr (Tile x (r, c)) p win | p >= (c-1) = "|" ++ wh x p win ++ "\n"
-         | otherwise = whr (Tile x (r, c)) (p+1) win ++ "|"  ++ wh x p win ++ "\n"
+printBoard :: Board -> Int -> Int -> String
+printBoard (Tile x (r, c)) p win | p >= (c-1) = "|" ++ printBoardHelper x p win ++ "\n"
+         | otherwise = printBoard (Tile x (r, c)) (p+1) win ++ "|"  ++ printBoardHelper x p win ++ "\n"
 
 -- checks if the move is legal
 --
 isLegalMove:: Board -> Column -> Bool
-isLegalMove (Tile [] (r, c)) z = True
-isLegalMove (Tile x (r, c)) z | z >= c = False
-           | otherwise = (kk < r)
-              where
-                kk = length k
-                k  = (x !! z)
+isLegalMove (Tile [] (r, c)) col = True
+isLegalMove bd@(Tile b (r, c)) col 
+    | col >= c = False
+    | otherwise = isLegalMoveHelper bd col
+
+-- checks if the move is within the rows of the board
+isLegalMoveHelper :: Board -> Column -> Bool
+isLegalMoveHelper (Tile bd (r,c)) col = (length (bd !! col) < r)
 
 -- make one move, raise errors for illegal move
 --
@@ -243,12 +241,12 @@ turn (Tile x (r, c))  | rc > yc = P2
 
 --- PLAY GAME -----
 play :: Board -> IO ()
-play board | checkWin board == 1 = putStrLn "P1 wins!"
-           | checkWin board == 2 = putStrLn "P2 wins!"
+play board | checkWin board == 1 = putStrLn "Player 1 wins!"
+           | checkWin board == 2 = putStrLn "Player 2 wins!"
            -- showBoard 2 board
            | isDraw board == True = putStrLn "Draw. Game Over."
            | otherwise = do
-             x <- readInteger (turn board)
+             x <- getMove (turn board)
              ok <- checkMove board x
              let board1 | ok  = makeMove board x (turn board)
                         | otherwise = board
@@ -258,27 +256,30 @@ play board | checkWin board == 1 = putStrLn "P1 wins!"
 
 --convert False to a String: Illegal Move!
 --
-convert :: Bool -> String
-convert True = ""
-convert False = "Illegal Move!\n"
+convert :: Bool -> Board -> String
+convert bool bd
+    | bool == True = ""
+    | bool ==  False = 
+        "Uh Oh! That move is outside of the board! Try Again " ++ 
+        (showPlayer (turn(bd))) ++ "! \n"
+    
 
 --checkMove, check the move is valid or not, reture True or False
 --
 checkMove :: Board -> Column -> IO Bool
 checkMove b c = do
-                let x = isLegalMove b c
-                putStr (convert x)
-                return (x)
+    let x = isLegalMove b c
+    putStr (convert x b) 
+    return (x)
 
 --Prompt for user imput for each turn
 --
-readInteger :: Player -> IO Int
-readInteger player = do
-                     putStr "\nPlease enter move for "
-                     putStr (show player)
-                     putStrLn ": "
-                     x<-getLine
-                     return (read x)
+getMove :: Player -> IO Int
+getMove player = do
+    putStrLn ""
+    putStrLn ("Please enter move for " ++ (showPlayer player)  ++ ": ")
+    column <-getLine
+    return (read column)
 
 
 -- type main to start the game
@@ -288,6 +289,14 @@ main :: IO ()
 row = 6
 col = 7
 main = play (newBoard (row,col))
+{-
+test1 = True
+test2 = False
+test3 :: Int -> Bool
+test3 i = do
+    
+    return False
+-}
 
 --TODO:
 -- reorganize
@@ -313,6 +322,24 @@ iterateRows rows columns=
 iterateColumns 0 = return
 iterateColumns columns = 
 222222    do
+        if piece == P1 || piece == P2
+    do
+        if piece == P1 || piece == P2
+    do
+        if piece == P1 || piece == P2
+    do
+        if piece == P1 || piece == P2
+    do
+        if piece == P1 || piece == P2
+    do
+        if piece == P1 || piece == P2
+    do
+        if piece == P1 || piece == P2
+    do
+        if piece == P1 || piece == P2
+    do
+        if piece == P1 || piece == P2
+    do
         if piece == P1 || piece == P2
     do
         if piece == P1 || piece == P2
